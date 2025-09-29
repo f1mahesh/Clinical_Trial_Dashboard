@@ -1,0 +1,353 @@
+# Clinical Trial Analytics Dashboard - SQL Queries Configuration
+# This file contains all SQL queries used throughout the application
+
+# Database connection test queries
+database:
+  test_connection: "SELECT COUNT(*) as count FROM studies LIMIT 1"
+  get_study_count: "SELECT COUNT(*) as count FROM studies"
+
+# Trial Landscape Analytics
+trial_landscape:
+  total_studies: "SELECT COUNT(*) as count FROM studies"
+  
+  phase_distribution: |
+    SELECT phase, COUNT(*) as count 
+    FROM studies 
+    WHERE phase IS NOT NULL 
+    GROUP BY phase 
+    ORDER BY count DESC
+  
+  status_distribution: |
+    SELECT overall_status, COUNT(*) as count 
+    FROM studies 
+    GROUP BY overall_status 
+    ORDER BY count DESC
+  
+  study_type_distribution: |
+    SELECT study_type, COUNT(*) as count 
+    FROM studies 
+    GROUP BY study_type 
+    ORDER BY count DESC
+  
+  top_conditions: |
+    SELECT name, COUNT(*) as studies_count 
+    FROM conditions 
+    GROUP BY name 
+    ORDER BY studies_count DESC 
+    LIMIT 10
+  
+  sponsor_analysis: |
+    SELECT 
+        s.source_class,
+        COUNT(*) as studies_count,
+        AVG(s.enrollment) as avg_enrollment,
+        AVG(cv.actual_duration) as avg_duration
+    FROM studies s
+    LEFT JOIN calculated_values cv ON s.nct_id = cv.nct_id
+    WHERE s.source_class IS NOT NULL
+    GROUP BY s.source_class
+    ORDER BY studies_count DESC
+  
+  geographic_distribution: |
+    SELECT 
+        f.country,
+        COUNT(DISTINCT f.nct_id) as studies_count,
+        COUNT(*) as facilities_count
+    FROM facilities f
+    GROUP BY f.country
+    ORDER BY studies_count DESC
+  
+  registration_query: |
+    SELECT 
+        CASE 
+            WHEN :time_period = 'Monthly' THEN DATE_TRUNC('month', study_first_submitted_date)
+            WHEN :time_period = 'Quarterly' THEN DATE_TRUNC('quarter', study_first_submitted_date)
+            ELSE DATE_TRUNC('year', study_first_submitted_date)
+        END as period,
+        COUNT(*) as count
+    FROM studies
+    WHERE study_first_submitted_date IS NOT NULL
+    GROUP BY period
+    ORDER BY period
+
+# Success & Completion Analytics
+success_analytics:
+  completion_by_phase: |
+    SELECT 
+        phase,
+        COUNT(*) as total_studies,
+        SUM(CASE WHEN overall_status = 'COMPLETED' THEN 1 ELSE 0 END) as completed_studies,
+        ROUND(100.0 * SUM(CASE WHEN overall_status = 'COMPLETED' THEN 1 ELSE 0 END) / COUNT(*), 2) as completion_rate
+    FROM studies
+    WHERE phase IS NOT NULL
+    GROUP BY phase
+    ORDER BY completion_rate DESC
+  
+  results_reporting: |
+    SELECT 
+        s.source_class,
+        COUNT(*) as total_studies,
+        SUM(CASE WHEN cv.were_results_reported = '1' THEN 1 ELSE 0 END) as reported_results,
+        ROUND(100.0 * SUM(CASE WHEN cv.were_results_reported = '1' THEN 1 ELSE 0 END) / COUNT(*), 2) as reporting_rate,
+        AVG(cv.months_to_report_results) as avg_months_to_report
+    FROM studies s
+    LEFT JOIN calculated_values cv ON s.nct_id = cv.nct_id
+    WHERE s.source_class IS NOT NULL
+    GROUP BY s.source_class
+    ORDER BY reporting_rate DESC
+  
+  duration_analysis: |
+    SELECT 
+        phase,
+        AVG(cv.actual_duration) as avg_duration,
+        MIN(cv.actual_duration) as min_duration,
+        MAX(cv.actual_duration) as max_duration,
+        COUNT(*) as studies_count
+    FROM studies s
+    LEFT JOIN calculated_values cv ON s.nct_id = cv.nct_id
+    WHERE phase IS NOT NULL AND cv.actual_duration IS NOT NULL
+    GROUP BY phase
+    ORDER BY avg_duration
+
+# Innovation & Market Insights
+innovation_insights:
+  intervention_trends: |
+    SELECT 
+        intervention_type,
+        COUNT(DISTINCT i.nct_id) as studies_count,
+        COUNT(*) as total_interventions
+    FROM interventions i
+    JOIN studies s ON i.nct_id = s.nct_id
+    GROUP BY intervention_type
+    ORDER BY studies_count DESC
+  
+  novel_interventions: |
+    SELECT 
+        i.name,
+        COUNT(DISTINCT i.nct_id) as studies_count,
+        i.intervention_type
+    FROM interventions i
+    GROUP BY i.name, i.intervention_type
+    HAVING COUNT(DISTINCT i.nct_id) >= 5
+    ORDER BY studies_count DESC
+    LIMIT 20
+
+  emerging_areas: |
+    SELECT 
+        c.name as condition,
+        COUNT(DISTINCT c.nct_id) as studies_count,
+        COUNT(DISTINCT CASE WHEN s.source_class = 'Industry' THEN c.nct_id END) as industry_studies
+    FROM conditions c
+    JOIN studies s ON c.nct_id = s.nct_id
+    GROUP BY c.name
+    HAVING COUNT(DISTINCT c.nct_id) >= 10
+    ORDER BY studies_count DESC
+    LIMIT 15
+  
+  device_drug_analysis: |
+    SELECT 
+        CASE 
+            WHEN is_fda_regulated_drug = '1' THEN 'Drug Regulated'
+            WHEN is_fda_regulated_device = '1' THEN 'Device Regulated'
+            ELSE 'Other'
+        END as regulation_type,
+        COUNT(*) as studies_count,
+        AVG(enrollment) as avg_enrollment
+    FROM studies
+    GROUP BY regulation_type
+    ORDER BY studies_count DESC
+
+  sponsor_innovation: |
+    SELECT 
+        s.source_class,
+        COUNT(DISTINCT i.intervention_type) as unique_interventions,
+        COUNT(*) as total_studies,
+        AVG(s.enrollment) as avg_enrollment
+    FROM studies s
+    LEFT JOIN interventions i ON s.nct_id = i.nct_id
+    WHERE s.source_class IS NOT NULL
+    GROUP BY s.source_class
+    ORDER BY unique_interventions DESC
+
+# Access & Equity Analysis
+access_equity:
+  geographic_access: |
+    SELECT 
+        f.country,
+        COUNT(DISTINCT f.nct_id) as studies_count,
+        COUNT(*) as facilities_count,
+        AVG(s.enrollment) as avg_enrollment
+    FROM facilities f
+    JOIN studies s ON f.nct_id = s.nct_id
+    WHERE f.country IS NOT NULL
+    GROUP BY f.country
+    ORDER BY studies_count DESC
+  
+  gender_inclusion: |
+    SELECT 
+        f.country,
+        COUNT(DISTINCT f.nct_id) as studies_available,
+        COUNT(*) as total_facilities,
+        ROUND(AVG(s.enrollment), 0) as avg_enrollment_per_study
+    FROM facilities f
+    JOIN studies s ON f.nct_id = s.nct_id
+    GROUP BY f.country
+    ORDER BY studies_available DESC
+  
+  age_inclusion: |
+    SELECT 
+        CASE 
+            WHEN adult = '1' AND child = '1' AND older_adult = '1' THEN 'All Ages'
+            WHEN adult = '1' AND child = '1' THEN 'Adult & Child'
+            WHEN adult = '1' AND older_adult = '1' THEN 'Adult & Older Adult'
+            WHEN adult = '1' THEN 'Adult Only'
+            WHEN child = '1' THEN 'Child Only'
+            WHEN older_adult = '1' THEN 'Older Adult Only'
+            ELSE 'Unspecified'
+        END as age_group,
+        COUNT(*) as studies_count
+    FROM eligibilities
+    GROUP BY age_group
+    ORDER BY studies_count DESC
+
+  healthy_volunteer_inclusion: |
+    SELECT 
+        healthy_volunteers,
+        COUNT(*) as studies_count
+    FROM eligibilities
+    GROUP BY healthy_volunteers
+    
+# Investigator Ranking
+investigator_ranking:
+  investigator_data: |
+    SELECT 
+        i.name as investigator_name,
+        i.role as investigator_role,
+        COUNT(DISTINCT s.nct_id) as total_studies,
+        SUM(CASE WHEN s.overall_status = 'COMPLETED' THEN 1 ELSE 0 END) as completed_studies,
+        AVG(s.enrollment) as avg_enrollment,
+        AVG(cv.actual_duration) as avg_duration
+    FROM investigators i
+    JOIN studies s ON i.nct_id = s.nct_id
+    LEFT JOIN calculated_values cv ON s.nct_id = cv.nct_id
+    WHERE i.name IS NOT NULL
+    GROUP BY i.name, i.role
+    HAVING COUNT(DISTINCT s.nct_id) >= 2
+    ORDER BY total_studies DESC
+
+# Facility Ranking
+facility_ranking:
+  facility_data: |
+    SELECT 
+        f.name as facility_name,
+        f.country,
+        f.city,
+        COUNT(DISTINCT f.nct_id) as total_studies,
+        SUM(CASE WHEN s.overall_status = 'COMPLETED' THEN 1 ELSE 0 END) as completed_studies,
+        AVG(s.enrollment) as avg_enrollment,
+        COUNT(DISTINCT i.intervention_type) as unique_interventions
+    FROM facilities f
+    JOIN studies s ON f.nct_id = s.nct_id
+    LEFT JOIN interventions i ON s.nct_id = i.nct_id
+    WHERE f.name IS NOT NULL
+    GROUP BY f.name, f.country, f.city
+    HAVING COUNT(DISTINCT f.nct_id) >= 3
+    ORDER BY total_studies DESC
+
+# Common Service
+common_service:
+  sponsors_list: |
+    SELECT 
+        sp.name as sponsor_name,
+        sp.agency_class,
+        COUNT(DISTINCT sp.nct_id) as total_studies,
+        COUNT(DISTINCT CASE WHEN s.overall_status = 'COMPLETED' THEN sp.nct_id END) as completed_studies
+    FROM sponsors sp
+    JOIN studies s ON sp.nct_id = s.nct_id
+    WHERE sp.name IS NOT NULL AND sp.name != ''
+    GROUP BY sp.name, sp.agency_class
+    HAVING COUNT(DISTINCT sp.nct_id) >= 1
+    ORDER BY total_studies DESC
+
+  studies_by_sponsor: |
+    SELECT 
+        s.nct_id,
+        s.brief_title,
+        s.official_title,
+        s.overall_status,
+        s.phase,
+        s.study_type,
+        s.enrollment,
+        s.start_date,
+        s.completion_date,
+        s.source_class,
+        cv.actual_duration,
+        cv.were_results_reported
+    FROM studies s
+    JOIN sponsors sp ON s.nct_id = sp.nct_id
+    LEFT JOIN calculated_values cv ON s.nct_id = cv.nct_id
+    WHERE sp.name = :sponsor_name
+    ORDER BY s.nct_id DESC
+
+# Study Reports
+study_reports:
+  detailed_study: |
+    SELECT 
+        s.*,
+        c.name as condition_name,
+        i.intervention_type,
+        i.intervention_name,
+        f.name as facility_name,
+        f.country as facility_country
+    FROM studies s
+    LEFT JOIN conditions c ON s.nct_id = c.nct_id
+    LEFT JOIN interventions i ON s.nct_id = i.nct_id
+    LEFT JOIN facilities f ON s.nct_id = f.nct_id
+    WHERE s.nct_id = %s
+
+# Sponsor Profiles
+sponsor_profiles:
+  sponsor_overview: |
+    SELECT 
+        source_class,
+        COUNT(*) as total_studies,
+        COUNT(DISTINCT phase) as phases_covered,
+        AVG(enrollment) as avg_enrollment,
+        SUM(CASE WHEN overall_status = 'COMPLETED' THEN 1 ELSE 0 END) as completed_studies
+    FROM studies
+    WHERE source_class = %s
+    GROUP BY source_class
+  
+  sponsor_conditions: |
+    SELECT 
+        c.name as condition,
+        COUNT(*) as studies_count
+    FROM studies s
+    JOIN conditions c ON s.nct_id = c.nct_id
+    WHERE s.source_class = %s
+    GROUP BY c.name
+    ORDER BY studies_count DESC
+    LIMIT 10
+  
+  sponsor_interventions: |
+    SELECT 
+        i.intervention_type,
+        COUNT(*) as studies_count
+    FROM studies s
+    JOIN interventions i ON s.nct_id = i.nct_id
+    WHERE s.source_class = %s
+    GROUP BY i.intervention_type
+    ORDER BY studies_count DESC
+
+# Sample Database Creation
+sample_database:
+  create_studies: "SELECT nct_id FROM studies"
+  create_sponsors: "SELECT nct_id FROM studies"
+  create_conditions: "SELECT nct_id FROM studies"
+  create_interventions: "SELECT nct_id FROM studies LIMIT 500"
+  create_facilities: "SELECT nct_id FROM studies LIMIT 600"
+  create_outcomes: "SELECT nct_id FROM studies"
+  create_calculated_values: "SELECT nct_id FROM studies"
+  create_designs: "SELECT nct_id FROM studies WHERE study_type = 'Interventional' LIMIT 700"
+  create_eligibilities: "SELECT nct_id FROM studies LIMIT 800"
+  create_investigators: "SELECT nct_id FROM studies" 

@@ -21,3 +21,4 @@ openai>=1.0.0
 google-generativeai>=0.3.0
 langchain-google-genai>=0.0.8
 millify>=0.1.1
+geopandas>=1.1.1

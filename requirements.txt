@@ -13,7 +13,7 @@ requests>=2.31.0
 certifi>=2023.7.22
 urllib3>=2.0.0
 pycountry>=24.5.18
-
+pycountry-convert>=0.7.2
 streamlit-float>=0.3.0
 langchain>=0.0.350
 langchain-experimental>=0.0.40

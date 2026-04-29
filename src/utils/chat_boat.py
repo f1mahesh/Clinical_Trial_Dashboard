@@ -12,17 +12,15 @@ import re
 from streamlit_float import *
 
 # LangChain imports
-from langchain.agents import create_sql_agent
-from langchain.agents.agent_toolkits import SQLDatabaseToolkit
-from langchain.sql_database import SQLDatabase
-from langchain.llms import OpenAI
-from langchain.chat_models import ChatOpenAI
-from langchain.agents import AgentExecutor
-from langchain.schema import SystemMessage, HumanMessage
-from langchain.tools import Tool
-from langchain.agents.agent_types import AgentType
-from langchain.callbacks import StreamlitCallbackHandler
-from langchain.memory import ConversationBufferWindowMemory
+from langchain_community.agent_toolkits import create_sql_agent, SQLDatabaseToolkit
+from langchain_community.utilities import SQLDatabase
+from langchain_openai import OpenAI, ChatOpenAI
+from langchain_classic.agents.agent import AgentExecutor
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.tools import Tool
+from langchain_classic.agents.agent_types import AgentType
+from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
+from langchain_classic.memory import ConversationBufferWindowMemory
 
 # Google Gemini imports
 try:
@@ -1418,4 +1416,4 @@ def render_chat_boat():
         render_floating_chat_popup()
 
 
-# render_chat_boat() 
+# render_chat_boat()
